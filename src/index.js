@@ -1,4 +1,5 @@
 import { handleTelegram } from './handlers/telegram.js';
+import { handleEmail } from './handlers/email.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -9,11 +10,9 @@ export default {
       return handleTelegram(request, env);
     }
 
-    // Email Handling (Placeholder for Email Routing or HTTP trigger)
-    if (request.method === 'POST' && url.pathname === '/email') {
-      // Logic for parsing forwarded emails can go here
-      // For now, we can reuse the telegram handler logic or create a specific one
-      return new Response('Email handler not implemented yet', { status: 501 });
+    // Endpoint para emails desde Gmail Apps Script
+    if (url.pathname === '/email' && request.method === 'POST') {
+      return handleEmail(request, env);
     }
 
     // Health check
