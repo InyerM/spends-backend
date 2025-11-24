@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      csv-parse:
+        specifier: ^5.6.0
+        version: 5.6.0
       google-auth-library:
         specifier: ^9.6.3
         version: 9.15.1
@@ -393,6 +396,9 @@ packages:
   cookie@0.7.2:
     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
+
+  csv-parse@5.6.0:
+    resolution: {integrity: sha512-l3nz3euub2QMg5ouu5U09Ew9Wf6/wQ8I++ch1loQ0ljmzhmfZYrH9fflS22i/PQEvsPvxCwxgz5q7UB8K1JO4Q==}
 
   data-uri-to-buffer@2.0.2:
     resolution: {integrity: sha512-ND9qDTLc6diwj+Xe5cdAgVTbLVdXbtxTJRXRhli8Mowuaan+0EJOtdqJ0QCHNSSPyoXGx9HX2/VMnKeC34AChA==}
@@ -905,6 +911,8 @@ snapshots:
     optional: true
 
   cookie@0.7.2: {}
+
+  csv-parse@5.6.0: {}
 
   data-uri-to-buffer@2.0.2: {}
 
