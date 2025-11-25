@@ -1,4 +1,4 @@
-import { SupabaseClient } from '../services/supabase';
+import { createSupabaseServices } from '../services/supabase';
 import { Env } from '../types/env';
 import { CreateTransactionInput } from '../types/transaction';
 import { getCurrentColombiaTimes } from '../utils/date';
@@ -25,21 +25,21 @@ export async function handleTransaction(request: Request, env: Env): Promise<Res
     const { parseExpense } = await import('../parsers/gemini');
     const expense = await parseExpense(text, env.GEMINI_API_KEY);
     
-    const supabase = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+    const services = createSupabaseServices(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
     const colombiaTimes = getCurrentColombiaTimes();
     
     let accountId: string;
-    const account = await supabase.getAccount(expense.bank, expense.last_four);
+    const account = await services.accounts.getAccount(expense.bank, expense.last_four);
     if (account) {
       accountId = account.id;
     } else {
-       const fallback = await supabase.getAccount('cash') || await supabase.getAccount('bancolombia');
+       const fallback = await services.accounts.getAccount('cash') || await services.accounts.getAccount('bancolombia');
        if (!fallback) throw new Error("No default account found");
        accountId = fallback.id;
     }
 
     let categoryId: string | undefined;
-    const category = await supabase.getCategory(expense.category);
+    const category = await services.categories.getCategory(expense.category);
     if (category) {
       categoryId = category.id;
     }
@@ -59,8 +59,8 @@ export async function handleTransaction(request: Request, env: Env): Promise<Res
       parsed_data: expense as unknown as Record<string, unknown>
     };
 
-    const finalTransaction = await supabase.applyAutomationRules(transactionInput);
-    const savedTransaction = await supabase.createTransaction(finalTransaction);
+    const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
+    const savedTransaction = await services.transactions.createTransaction(finalTransaction);
 
     return new Response(JSON.stringify({
       status: 'success',

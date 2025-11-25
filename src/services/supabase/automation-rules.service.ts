@@ -1,0 +1,96 @@
+import { BaseService } from './base.service';
+import type { AutomationRule, CreateTransactionInput } from '../../types';
+
+export class AutomationRulesService extends BaseService {
+  async getAutomationRules(): Promise<AutomationRule[]> {
+    return await this.fetch<AutomationRule[]>(
+      '/rest/v1/automation_rules?is_active=eq.true&order=priority.desc&select=*'
+    );
+  }
+
+  async applyAutomationRules(
+    transaction: CreateTransactionInput
+  ): Promise<CreateTransactionInput> {
+    const rules = await this.getAutomationRules();
+
+    for (const rule of rules) {
+      if (this.matchesConditions(transaction, rule.conditions)) {
+        transaction = this.applyActions(transaction, rule.actions);
+        console.log(`[Rule Applied] ${rule.name}`);
+      }
+    }
+
+    return transaction;
+  }
+
+  private matchesConditions(
+    transaction: CreateTransactionInput,
+    conditions: AutomationRule['conditions']
+  ): boolean {
+    if (conditions.description_contains) {
+      const desc = transaction.description.toLowerCase();
+      const matches = conditions.description_contains.some((keyword: string) =>
+        desc.includes(keyword.toLowerCase())
+      );
+      if (!matches) return false;
+    }
+
+    if (conditions.description_regex) {
+      const regex = new RegExp(conditions.description_regex, 'i');
+      if (!regex.test(transaction.description)) return false;
+    }
+
+    if (conditions.amount_between) {
+      const [min, max] = conditions.amount_between;
+      if (transaction.amount < min || transaction.amount > max) {
+        return false;
+      }
+    }
+
+    if (conditions.amount_equals !== undefined) {
+      if (transaction.amount !== conditions.amount_equals) {
+        return false;
+      }
+    }
+
+    if (conditions.from_account) {
+      if (transaction.account_id !== conditions.from_account) {
+        return false;
+      }
+    }
+
+    if (conditions.source) {
+      if (!conditions.source.includes(transaction.source)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private applyActions(
+    transaction: CreateTransactionInput,
+    actions: AutomationRule['actions']
+  ): CreateTransactionInput {
+    if (actions.set_type) {
+      transaction.type = actions.set_type;
+    }
+
+    if (actions.set_category !== undefined) {
+      transaction.category_id = actions.set_category || undefined;
+    }
+
+    if (actions.link_to_account) {
+      transaction.transfer_to_account_id = actions.link_to_account;
+      transaction.transfer_id = crypto.randomUUID();
+    }
+
+    if (actions.add_note) {
+      transaction.notes = transaction.notes
+        ? `${transaction.notes}\n${actions.add_note}`
+        : actions.add_note;
+    }
+
+    return transaction;
+  }
+}

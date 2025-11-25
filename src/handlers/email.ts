@@ -1,5 +1,5 @@
 import { parseExpense } from '../parsers/gemini';
-import { SupabaseClient } from '../services/supabase';
+import { createSupabaseServices } from '../services/supabase';
 import { getCurrentColombiaTimes, convertDateFormat } from '../utils/date';
 import { Env } from '../types/env';
 import { CreateTransactionInput } from '../types/transaction';
@@ -43,7 +43,7 @@ export async function handleEmail(request: Request, env: Env): Promise<Response>
       console.log('[Email] Clean text:', cleanText);
       
       const expense = await parseExpense(cleanText, env.GEMINI_API_KEY);
-      const supabase = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+      const services = createSupabaseServices(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
       
       const colombiaTimes = getCurrentColombiaTimes();
       let date = colombiaTimes.date;
@@ -55,7 +55,7 @@ export async function handleEmail(request: Request, env: Env): Promise<Response>
       }
 
       let accountId: string;
-      const account = await supabase.getAccount('bancolombia', expense.last_four);
+      const account = await services.accounts.getAccount('bancolombia', expense.last_four);
       if (account) {
         accountId = account.id;
       } else {
@@ -63,7 +63,7 @@ export async function handleEmail(request: Request, env: Env): Promise<Response>
       }
 
       let categoryId: string | undefined;
-      const category = await supabase.getCategory(expense.category);
+      const category = await services.categories.getCategory(expense.category);
       if (category) {
         categoryId = category.id;
       }
@@ -83,8 +83,8 @@ export async function handleEmail(request: Request, env: Env): Promise<Response>
         parsed_data: expense as unknown as Record<string, unknown>
       };
 
-      const finalTransaction = await supabase.applyAutomationRules(transactionInput);
-      await supabase.createTransaction(finalTransaction);
+      const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
+      await services.transactions.createTransaction(finalTransaction);
       
       console.log('[Email] Processed successfully');
       

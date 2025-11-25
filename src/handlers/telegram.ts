@@ -1,7 +1,7 @@
 import { Telegraf, Context } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { parseExpense } from '../parsers/gemini';
-import { SupabaseClient } from '../services/supabase';
+import { createSupabaseServices } from '../services/supabase';
 import { getCurrentColombiaTimes, convertDateFormat, formatDateForDisplay } from '../utils/date';
 import { formatCurrency } from '../utils/formatting';
 import { Env } from '../types/env';
@@ -9,7 +9,7 @@ import { CreateTransactionInput } from '../types/transaction';
 
 export async function handleTelegram(request: Request, env: Env): Promise<Response> {
   const bot = new Telegraf(env.TELEGRAM_BOT_TOKEN);
-  const supabase = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+  const services = createSupabaseServices(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
   bot.catch((err, ctx) => {
     console.error(`Telegraf error for ${ctx.updateType}`, err);
@@ -39,13 +39,12 @@ export async function handleTelegram(request: Request, env: Env): Promise<Respon
       }
 
       let accountId: string;
-      const account = await supabase.getAccount(expense.bank, expense.last_four);
+      const account = await services.accounts.getAccount(expense.bank, expense.last_four);
       
       if (account) {
         accountId = account.id;
       } else {
-        // Fallback to cash account if bank account not found
-        const cashAccount = await supabase.getAccount('cash');
+        const cashAccount = await services.accounts.getAccount('cash');
         if (cashAccount) {
           accountId = cashAccount.id;
         } else {
@@ -54,7 +53,7 @@ export async function handleTelegram(request: Request, env: Env): Promise<Respon
       }
 
       let categoryId: string | undefined;
-      const category = await supabase.getCategory(expense.category);
+      const category = await services.categories.getCategory(expense.category);
       if (category) {
         categoryId = category.id;
       }
@@ -74,8 +73,8 @@ export async function handleTelegram(request: Request, env: Env): Promise<Respon
         parsed_data: expense as unknown as Record<string, unknown>
       };
 
-      const finalTransaction = await supabase.applyAutomationRules(transactionInput);
-      const savedTransaction = await supabase.createTransaction(finalTransaction);
+      const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
+      const savedTransaction = await services.transactions.createTransaction(finalTransaction);
 
       const fechaFormateada = formatDateForDisplay(savedTransaction.date);
       const amountFormatted = formatCurrency(savedTransaction.amount);
