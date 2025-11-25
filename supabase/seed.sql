@@ -192,7 +192,7 @@ SELECT
   '3104633357',
   nequi.id,
   jsonb_build_object('contains_text', ARRAY['Transferiste', '*3104633357']),
-  jsonb_build_object('set_category', 'transfer', 'link_account', nequi.id)
-FROM accounts nequi
-WHERE nequi.institution = 'nequi'
+  jsonb_build_object('set_category', transfer_cat.id, 'link_account', nequi.id)
+FROM accounts nequi, categories transfer_cat
+WHERE nequi.institution = 'nequi' AND transfer_cat.slug = 'transfer'
 ON CONFLICT DO NOTHING;

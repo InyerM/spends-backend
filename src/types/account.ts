@@ -4,7 +4,8 @@ export type AccountType =
   | 'credit_card' 
   | 'cash' 
   | 'investment' 
-  | 'crypto';
+  | 'crypto'
+  | 'credit';
 
 export interface Account {
   id: string;

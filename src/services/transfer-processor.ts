@@ -182,7 +182,7 @@ export async function processTransfer(
 }
 
 /**
- * Build dynamic prompt section for transfer rules
+ * Build dynamic prompt section for transfer rules (kept minimal to avoid token limits)
  */
 export function buildTransferPromptSection(rules: AutomationRule[]): string {
   if (rules.length === 0) {
@@ -191,21 +191,12 @@ export function buildTransferPromptSection(rules: AutomationRule[]): string {
 
   const ruleLines = rules
     .filter(r => r.match_phone)
-    .map(r => `- If transferring to phone *${r.match_phone} → category: "transfer", note: "${r.name}"`)
-    .join('\n');
+    .map(r => `*${r.match_phone}→transfer`)
+    .join(', ');
 
   if (!ruleLines) {
     return '';
   }
 
-  return `
-CUSTOM TRANSFER RULES:
-${ruleLines}
-
-TRANSFER DETECTION:
-- Bank messages with "Transferiste" or "Enviaste" are transfers
-- Extract destination phone number (10 digits or *XXXXXXXXXX format)
-- If phone matches a rule above → use that category and note
-- If no match → category: "missing"
-`;
+  return `TRANSFERS: Messages with "Transferiste"/"Enviaste" are transfers. Known phones: ${ruleLines}. Unknown phones→category:"missing".`;
 }

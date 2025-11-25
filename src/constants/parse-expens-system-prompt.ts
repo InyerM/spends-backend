@@ -18,7 +18,7 @@ OUTPUT (strict JSON without markdown):
   "original_date": string | null,
   "original_time": string | null,
   "last_four": string | null,
-  "account_type": "checking|savings|credit_card" | null
+  "account_type": "checking|savings|credit_card|credit" | null
 }
 
 CATEGORY SLUGS - Choose the MOST SPECIFIC category that matches:
@@ -161,6 +161,8 @@ Account type:
 - "T.Deb", "débito" → "checking"
 - "Crédito", "T.Cred" → "credit_card"
 - "ahorros" → "savings"
+- "Transferiste", "Enviaste", transfers → "savings"
+- "crédito de libre inversión", "préstamo" → "credit"
 - If unspecified → null
 
 Last four digits:

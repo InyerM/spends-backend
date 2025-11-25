@@ -5,7 +5,7 @@ export class AccountsService extends BaseService {
   async getAccount(
     institution: string,
     lastFour?: string | null,
-    accountType?: 'checking' | 'savings' | 'credit_card' | null
+    accountType?: 'checking' | 'savings' | 'credit_card' | 'credit' | null
   ): Promise<Account | null> {
     console.log("Querying accounts for:", { institution, lastFour, accountType });
     

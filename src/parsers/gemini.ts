@@ -92,7 +92,17 @@ export async function parseExpense(
       const data = await response.json() as GeminiResponse;
       console.log('[Gemini] Full Response:', JSON.stringify(data, null, 2));
 
-      const content = data.candidates[0].content.parts[0].text;
+      // Check if response was truncated or has no content
+      const candidate = data.candidates?.[0];
+      if (!candidate?.content?.parts?.[0]?.text) {
+        const finishReason = candidate?.finishReason || 'UNKNOWN';
+        if (finishReason === 'MAX_TOKENS') {
+          throw new Error('Gemini response truncated - prompt too long');
+        }
+        throw new Error(`Gemini returned no content (reason: ${finishReason})`);
+      }
+
+      const content = candidate.content.parts[0].text;
       const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
       const expense = JSON.parse(cleanContent) as ParsedExpense;
 
