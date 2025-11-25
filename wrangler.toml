@@ -1,19 +1,11 @@
 name = "expense-assistant"
-main = "src/index.js"
-compatibility_date = "2024-11-01"
+main = "src/index.ts"
 compatibility_flags = ["nodejs_compat"]
-
+compatibility_date = "2024-11-23"
 
 [vars]
 ENVIRONMENT = "production"
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/16IYld_Q3kiXY4z6Bt9fEVCsHays7MBUDjmJI3XrICWI"
-
-# Secrets are managed via `wrangler secret put <KEY>`
-# Do NOT add them here.
-
-
-[triggers]
-crons = ["0 20 * * *"]  # Daily summary at 8pm Colombia time
+SUPABASE_URL = "http://localhost:54321"
 
 [observability]
 enabled = true

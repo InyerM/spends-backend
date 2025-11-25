@@ -1,8 +1,10 @@
-import { handleTelegram } from './handlers/telegram.js';
-import { handleEmail } from './handlers/email.js';
+import { handleTelegram } from './handlers/telegram';
+import { handleEmail } from './handlers/email';
+import { handleTransaction } from './handlers/transaction';
+import { Env } from './types/env';
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // Telegram Webhook
@@ -15,6 +17,11 @@ export default {
       return handleEmail(request, env);
     }
 
+    // Generic Transaction API
+    if (url.pathname === '/transaction' && request.method === 'POST') {
+      return handleTransaction(request, env);
+    }
+
     // Health check
     if (url.pathname === '/') {
       return new Response('Expense Assistant Bot is running!', { status: 200 });
@@ -24,7 +31,7 @@ export default {
   },
 
   // Cron Triggers
-  async scheduled(event, env, ctx) {
+  async scheduled(_event: ScheduledEvent, _env: Env, _ctx: ExecutionContext) {
     // Implement daily summary here
     console.log("Cron triggered");
   }
