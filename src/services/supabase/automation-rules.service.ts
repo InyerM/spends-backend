@@ -8,6 +8,41 @@ export class AutomationRulesService extends BaseService {
     );
   }
 
+  /**
+   * Get all active prompt texts for dynamic injection into Gemini
+   */
+  async getActivePrompts(): Promise<string[]> {
+    const rules = await this.fetch<AutomationRule[]>(
+      '/rest/v1/automation_rules?is_active=eq.true&prompt_text=not.is.null&order=priority.desc&select=prompt_text'
+    );
+    return rules
+      .filter(r => r.prompt_text)
+      .map(r => r.prompt_text as string);
+  }
+
+  /**
+   * Find a transfer rule by matching phone number
+   */
+  async findTransferRule(phoneNumber: string): Promise<AutomationRule | null> {
+    // Normalize phone number (remove leading * if present)
+    const normalizedPhone = phoneNumber.replace(/^\*/, '');
+    
+    const rules = await this.fetch<AutomationRule[]>(
+      `/rest/v1/automation_rules?is_active=eq.true&match_phone=eq.${normalizedPhone}&select=*`
+    );
+    
+    return rules.length > 0 ? rules[0] : null;
+  }
+
+  /**
+   * Get all transfer rules with phone matching
+   */
+  async getTransferRules(): Promise<AutomationRule[]> {
+    return await this.fetch<AutomationRule[]>(
+      '/rest/v1/automation_rules?is_active=eq.true&match_phone=not.is.null&order=priority.desc&select=*'
+    );
+  }
+
   async applyAutomationRules(
     transaction: CreateTransactionInput
   ): Promise<CreateTransactionInput> {

@@ -4,6 +4,7 @@ import { CacheService } from '../services/cache.service';
 import { getCurrentColombiaTimes, convertDateFormat } from '../utils/date';
 import { Env } from '../types/env';
 import { CreateTransactionInput } from '../types/transaction';
+import { isTransferMessage, processTransfer, buildTransferPromptSection } from '../services/transfer-processor';
 
 interface AppsScriptPayload {
   body?: string;
@@ -44,8 +45,21 @@ export async function handleEmail(request: Request, env: Env): Promise<Response>
       console.log('[Email] Clean text:', cleanText);
       
       const cache = new CacheService(env.REDIS_URL, env.REDIS_PASSWORD);
-      const expense = await parseExpense(cleanText, env.GEMINI_API_KEY, cache);
       const services = createSupabaseServices(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+      
+      // Fetch dynamic prompts and transfer rules for Gemini
+      const [activePrompts, transferRules] = await Promise.all([
+        services.automationRules.getActivePrompts(),
+        services.automationRules.getTransferRules(),
+      ]);
+      
+      // Build dynamic prompts including transfer rules
+      const dynamicPrompts = [
+        ...activePrompts,
+        buildTransferPromptSection(transferRules),
+      ].filter(Boolean);
+      
+      const expense = await parseExpense(cleanText, env.GEMINI_API_KEY, cache, { dynamicPrompts });
       
       const colombiaTimes = getCurrentColombiaTimes();
       let date = colombiaTimes.date;
@@ -85,8 +99,35 @@ export async function handleEmail(request: Request, env: Env): Promise<Response>
         parsed_data: expense as unknown as Record<string, unknown>
       };
 
-      const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
-      await services.transactions.createTransaction(finalTransaction, services.accounts, cache);
+      // Check if it's a transfer message
+      let isInternalTransfer = false;
+      
+      if (isTransferMessage(cleanText) || expense.category === 'transfer') {
+        // Process as transfer - may create dual transactions
+        const missingCategory = await services.categories.getCategory('missing');
+        const result = await processTransfer(
+          transactionInput,
+          cleanText,
+          services,
+          missingCategory?.id
+        );
+        
+        isInternalTransfer = result.transferInfo.isInternalTransfer;
+        
+        // Create all transactions (1 or 2)
+        for (const tx of result.transactions) {
+          const finalTx = await services.automationRules.applyAutomationRules(tx);
+          await services.transactions.createTransaction(finalTx, services.accounts, cache);
+        }
+        
+        if (isInternalTransfer) {
+          console.log(`[Email] Internal transfer created: ${result.transferInfo.ruleName}`);
+        }
+      } else {
+        // Normal flow
+        const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
+        await services.transactions.createTransaction(finalTransaction, services.accounts, cache);
+      }
       
       console.log('[Email] Processed successfully');
       

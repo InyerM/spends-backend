@@ -7,6 +7,7 @@ import { getCurrentColombiaTimes, convertDateFormat, formatDateForDisplay } from
 import { formatCurrency } from '../utils/formatting';
 import { Env } from '../types/env';
 import { CreateTransactionInput } from '../types/transaction';
+import { isTransferMessage, processTransfer, buildTransferPromptSection } from '../services/transfer-processor';
 
 export async function handleTelegram(request: Request, env: Env): Promise<Response> {
   const bot = new Telegraf(env.TELEGRAM_BOT_TOKEN);
@@ -103,7 +104,20 @@ async function processExpense(
 ) {
   try {
     ctx.sendChatAction('typing');
-    const expense = await parseExpense(text, env.GEMINI_API_KEY, cache);
+    
+    // Fetch dynamic prompts and transfer rules for Gemini
+    const [activePrompts, transferRules] = await Promise.all([
+      services.automationRules.getActivePrompts(),
+      services.automationRules.getTransferRules(),
+    ]);
+    
+    // Build dynamic prompts including transfer rules
+    const dynamicPrompts = [
+      ...activePrompts,
+      buildTransferPromptSection(transferRules),
+    ].filter(Boolean);
+    
+    const expense = await parseExpense(text, env.GEMINI_API_KEY, cache, { dynamicPrompts });
 
     const colombiaTimes = getCurrentColombiaTimes();
     let date = colombiaTimes.date;
@@ -149,8 +163,40 @@ async function processExpense(
       parsed_data: expense as unknown as Record<string, unknown>
     };
 
-    const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
-    const savedTransaction = await services.transactions.createTransaction(finalTransaction, services.accounts, cache);
+    // Check if it's a transfer message
+    let savedTransaction;
+    let transferInfo;
+    
+    if (isTransferMessage(text) || expense.category === 'transfer') {
+      // Process as transfer - may create dual transactions
+      const missingCategory = await services.categories.getCategory('missing');
+      const result = await processTransfer(
+        transactionInput,
+        text,
+        services,
+        missingCategory?.id
+      );
+      
+      transferInfo = result.transferInfo;
+      
+      // Create all transactions (1 or 2)
+      for (const tx of result.transactions) {
+        const finalTx = await services.automationRules.applyAutomationRules(tx);
+        savedTransaction = await services.transactions.createTransaction(finalTx, services.accounts, cache);
+      }
+      
+      if (transferInfo.isInternalTransfer) {
+        console.log(`[Transfer] Internal transfer created: ${transferInfo.ruleName}`);
+      }
+    } else {
+      // Normal flow
+      const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
+      savedTransaction = await services.transactions.createTransaction(finalTransaction, services.accounts, cache);
+    }
+    
+    if (!savedTransaction) {
+      throw new Error('Failed to save transaction');
+    }
 
     const fechaFormateada = formatDateForDisplay(savedTransaction.date);
     const amountFormatted = formatCurrency(savedTransaction.amount);
@@ -158,16 +204,27 @@ async function processExpense(
     const currentBalance = await services.accounts.getAccountBalance(accountId);
     const balanceFormatted = formatCurrency(currentBalance);
 
-    const confirmationMessage = `✅ Expense registered
+    let confirmationMessage = `✅ Expense registered
 
 💰 ${amountFormatted}
 🏪 ${savedTransaction.description}
 📅 ${fechaFormateada} ${savedTransaction.time}
 🏷️ ${expense.category}
 💳 ${expense.bank} - ${expense.payment_type}
-📊 Balance: ${balanceFormatted}
+📊 Balance: ${balanceFormatted}`;
+    
+    // Add transfer info if applicable
+    if (transferInfo?.isInternalTransfer) {
+      confirmationMessage = `✅ Internal Transfer
 
-🔗 [View Dashboard](${env.APP_URL || '#'})`;
+💰 ${amountFormatted}
+🔄 ${transferInfo.ruleName}
+📱 To: ${transferInfo.destinationPhone}
+📅 ${fechaFormateada} ${savedTransaction.time}
+📊 Balance: ${balanceFormatted}`;
+    }
+    
+    confirmationMessage += `\n\n🔗 [View Dashboard](${env.APP_URL || '#'})`;
     
     await ctx.reply(confirmationMessage);
 

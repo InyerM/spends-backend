@@ -24,8 +24,17 @@ export interface AutomationRule {
   name: string;
   is_active: boolean;
   priority: number;
+  prompt_text?: string | null;
+  match_phone?: string | null;
+  transfer_to_account_id?: string | null;
   conditions: AutomationRuleConditions;
   actions: AutomationRuleActions;
   created_at: string;
   updated_at: string;
+}
+
+export interface TransferRuleMatch {
+  rule: AutomationRule;
+  destinationPhone: string;
+  isInternalTransfer: boolean;
 }

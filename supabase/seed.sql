@@ -172,27 +172,27 @@ INSERT INTO categories (name, slug, type, icon, color) VALUES
 -- AUTOMATION RULES
 -- =============================================
 
--- Insert automation rule for Bancolombia → Nequi transfers
-INSERT INTO automation_rules (name, priority, conditions, actions) 
-SELECT 
-  'Detect Bancolombia to Nequi Transfer',
-  100,
-  jsonb_build_object(
-    'description_contains', ARRAY['transferencia', 'envío', 'enviaste', 'transfer'],
-    'from_account', bancolombia.id
-  ),
-  jsonb_build_object(
-    'set_type', 'transfer',
-    'set_category', transfer_cat.id,
-    'link_to_account', nequi.id,
-    'auto_reconcile', true
-  )
-FROM 
-  accounts bancolombia,
-  accounts nequi,
-  categories transfer_cat
-WHERE 
-  bancolombia.institution = 'bancolombia' 
-  AND bancolombia.type = 'checking'
-  AND nequi.institution = 'nequi'
-  AND transfer_cat.slug = 'transfer';
+-- Example: Transfer to personal Nequi account by phone number
+-- Replace '3104633357' with your actual Nequi phone number
+INSERT INTO automation_rules (
+  name, 
+  priority, 
+  is_active,
+  prompt_text,
+  match_phone,
+  transfer_to_account_id,
+  conditions,
+  actions
+) 
+SELECT
+  'Transfer to Personal Nequi',
+  200,
+  true,
+  'If transferring to phone *3104633357, categorize as internal transfer to Nequi account',
+  '3104633357',
+  nequi.id,
+  jsonb_build_object('contains_text', ARRAY['Transferiste', '*3104633357']),
+  jsonb_build_object('set_category', 'transfer', 'link_account', nequi.id)
+FROM accounts nequi
+WHERE nequi.institution = 'nequi'
+ON CONFLICT DO NOTHING;

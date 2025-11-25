@@ -3,6 +3,7 @@ import { CacheService } from '../services/cache.service';
 import { Env } from '../types/env';
 import { CreateTransactionInput } from '../types/transaction';
 import { getCurrentColombiaTimes } from '../utils/date';
+import { isTransferMessage, processTransfer, buildTransferPromptSection } from '../services/transfer-processor';
 
 interface TransactionRequest {
   text: string;
@@ -25,9 +26,21 @@ export async function handleTransaction(request: Request, env: Env): Promise<Res
 
     const { parseExpense } = await import('../parsers/gemini');
     const cache = new CacheService(env.REDIS_URL, env.REDIS_PASSWORD);
-    const expense = await parseExpense(text, env.GEMINI_API_KEY, cache);
-    
     const services = createSupabaseServices(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+    
+    // Fetch dynamic prompts and transfer rules for Gemini
+    const [activePrompts, transferRules] = await Promise.all([
+      services.automationRules.getActivePrompts(),
+      services.automationRules.getTransferRules(),
+    ]);
+    
+    // Build dynamic prompts including transfer rules
+    const dynamicPrompts = [
+      ...activePrompts,
+      buildTransferPromptSection(transferRules),
+    ].filter(Boolean);
+    
+    const expense = await parseExpense(text, env.GEMINI_API_KEY, cache, { dynamicPrompts });
     const colombiaTimes = getCurrentColombiaTimes();
     
     let accountId: string;
@@ -61,12 +74,37 @@ export async function handleTransaction(request: Request, env: Env): Promise<Res
       parsed_data: expense as unknown as Record<string, unknown>
     };
 
-    const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
-    const savedTransaction = await services.transactions.createTransaction(finalTransaction, services.accounts, cache);
+    // Check if it's a transfer message
+    let savedTransaction;
+    let transferInfo;
+    
+    if (isTransferMessage(text) || expense.category === 'transfer') {
+      // Process as transfer - may create dual transactions
+      const missingCategory = await services.categories.getCategory('missing');
+      const result = await processTransfer(
+        transactionInput,
+        text,
+        services,
+        missingCategory?.id
+      );
+      
+      transferInfo = result.transferInfo;
+      
+      // Create all transactions (1 or 2)
+      for (const tx of result.transactions) {
+        const finalTx = await services.automationRules.applyAutomationRules(tx);
+        savedTransaction = await services.transactions.createTransaction(finalTx, services.accounts, cache);
+      }
+    } else {
+      // Normal flow
+      const finalTransaction = await services.automationRules.applyAutomationRules(transactionInput);
+      savedTransaction = await services.transactions.createTransaction(finalTransaction, services.accounts, cache);
+    }
 
     return new Response(JSON.stringify({
       status: 'success',
-      transaction: savedTransaction
+      transaction: savedTransaction,
+      transfer: transferInfo
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }

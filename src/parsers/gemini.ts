@@ -2,20 +2,33 @@ import { ParsedExpense, GeminiResponse } from '../types/expense';
 import { CacheService } from '../services/cache.service';
 import { systemPrompt } from '../constants/parse-expens-system-prompt';
 
+export interface ParseExpenseOptions {
+  dynamicPrompts?: string[];
+}
+
 export async function parseExpense(
   text: string,
   apiKey: string,
-  cache?: CacheService
+  cache?: CacheService,
+  options?: ParseExpenseOptions
 ): Promise<ParsedExpense> {
   const model = "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  // Build final prompt with dynamic injections
+  let finalPrompt = systemPrompt;
+  if (options?.dynamicPrompts && options.dynamicPrompts.length > 0) {
+    const dynamicSection = options.dynamicPrompts.join('\n\n');
+    finalPrompt = `${systemPrompt}\n\n${dynamicSection}`;
+    console.log('[Gemini] Dynamic prompts injected:', options.dynamicPrompts.length);
+  }
 
   const requestBody = {
     contents: [
       {
         role: "user",
         parts: [
-          { text: systemPrompt },
+          { text: finalPrompt },
           { text: `Input to parse: "${text}"` }
         ]
       }
